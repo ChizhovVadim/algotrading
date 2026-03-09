@@ -1,7 +1,9 @@
-package trader
+package strategymanager
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 	"time"
@@ -76,23 +78,15 @@ func (s *SignalService) Init() error {
 		"Price", s.lastSignal.Price,
 		"Prediction", s.lastSignal.Prediction,
 	)
-	// тк можем подписаться на несколько инструментов,
-	// то подписываемся в отдельной горутине,
-	// чтобы сразу начать читать бары из первой подписки и не заблокироваться.
-	// IMarketData должен быть потокобезопасным, в частности QuikBroker.
-	// Если считать этот deadlock багом квика, то можно запускать отдельную горутину не здесь, а в QuikBroker::SubscribeCandles
-	go func() {
-		var err = s.marketData.SubscribeCandles(s.security, s.candleInterval)
-		if err != nil {
-			s.logger.Error("marketData.SubscribeCandles", "error", err)
-			return
-		}
-	}()
 	return nil
 }
 
-func (s *SignalService) CheckStatus() {
-	fmt.Printf("%10v %10v %16v %8v %8.4f\n",
+func (s *SignalService) Subscribe() error {
+	return s.marketData.SubscribeCandles(s.security, s.candleInterval)
+}
+
+func (s *SignalService) WriteStatus(w io.Writer) {
+	fmt.Fprintf(w, "%-10v %10v %16v %8v %8.4f\n",
 		s.name,
 		s.security.Name,
 		s.lastSignal.DateTime.Format("2006-01-02 15:04"),
@@ -118,6 +112,7 @@ func (s *SignalService) OnCandle(candle model.Candle) Signal {
 			"DateTime", s.baseCandle.DateTime,
 			"Price", s.baseCandle.ClosePrice)
 	}
+	var prevPrediction = s.lastSignal.Prediction
 	s.lastSignal = Signal{
 		Name:         s.name,
 		SecurityCode: s.security.Code,
@@ -131,7 +126,13 @@ func (s *SignalService) OnCandle(candle model.Candle) Signal {
 		s.lastSignal.Deadline = candle.DateTime.Add(9 * time.Minute) // от открытия бара или 4 минуты от закрытия.
 	}
 	if freshCandle {
-		s.logger.Debug("New signal",
+		var level slog.Level
+		if s.lastSignal.Prediction != prevPrediction {
+			level = slog.LevelInfo
+		} else {
+			level = slog.LevelDebug
+		}
+		s.logger.Log(context.Background(), level, "New signal",
 			"Signal", s.lastSignal)
 	}
 	return s.lastSignal

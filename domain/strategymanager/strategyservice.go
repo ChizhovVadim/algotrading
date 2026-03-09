@@ -1,7 +1,8 @@
-package trader
+package strategymanager
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -9,11 +10,12 @@ import (
 )
 
 type StrategyService struct {
-	logger          *slog.Logger
-	broker          model.IBroker
-	portfolio       *Portfolio
-	security        model.Security
-	signalName      string
+	logger     *slog.Logger
+	broker     model.IBroker
+	portfolio  *Portfolio
+	security   model.Security
+	signalName string
+	// планируемая позиция в портфеле (после исполнения заявки)
 	plannedPosition Optional[int]
 }
 
@@ -53,9 +55,14 @@ func (s *StrategyService) Init() error {
 	return nil
 }
 
-func (s *StrategyService) CheckStatus() {
+func (s *StrategyService) WriteStatus(w io.Writer) {
 	brokerPos, err := s.getBrokerPos()
 	if err != nil {
+		fmt.Fprintf(w, "%-10v %-10v %10v %v",
+			s.portfolio.Portfolio.Client,
+			s.portfolio.Portfolio.Portfolio,
+			s.security.Name,
+			err)
 		return
 	}
 	var status string
@@ -64,7 +71,7 @@ func (s *StrategyService) CheckStatus() {
 	} else {
 		status = "!"
 	}
-	fmt.Printf("%10v %10v %10v planned: %6v actual: %6v %v\n",
+	fmt.Fprintf(w, "%-10v %-10v %10v planned: %6v actual: %6v %v\n",
 		s.portfolio.Portfolio.Client,
 		s.portfolio.Portfolio.Portfolio,
 		s.security.Name,

@@ -2,11 +2,21 @@ package traderapp
 
 type Config struct {
 	//LogFolder        string
+	NotifyConfig     NotifyConfig
 	MarketData       string
 	UseCandleStorage bool
 	Brokers          []BrokerConfig    `xml:"Client"`
 	Signals          []SignalConfig    `xml:"Signal"`
 	Portfolios       []PortfolioConfig `xml:"Portfolio"`
+}
+
+type NotifyConfig struct {
+	Enabled  bool   `xml:",attr"`
+	From     string `xml:",attr"`
+	To       string `xml:",attr"`
+	Password string `xml:",attr"`
+	Host     string `xml:",attr"`
+	Port     string `xml:",attr"`
 }
 
 type BrokerConfig struct {

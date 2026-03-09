@@ -20,6 +20,7 @@ func OptimalLever(hprs []model.DateSum, riskSpecification func([]model.DateSum) 
 	var bestLever = 0.0
 	const step = 0.1
 
+	// Шибко умные могли бы использовать метод деления отрезка пополам
 	for lever := step; lever <= maxLever; lever += step {
 		var leverHprs = HprsWithLever(hprs, lever)
 		if !riskSpecification(leverHprs) {

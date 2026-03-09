@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"io"
 	"iter"
 )
 
@@ -55,7 +56,7 @@ type IMarketData interface {
 
 type IBroker interface {
 	Init(context.Context) error
-	CheckStatus()
+	WriteStatus(w io.Writer)
 	Close() error
 	GetPortfolioLimits(portfolio Portfolio) (PortfolioLimits, error)
 	GetPosition(portfolio Portfolio, security Security) (float64, error)

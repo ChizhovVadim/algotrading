@@ -1,6 +1,7 @@
 package brokerquik
 
 import (
+	"io"
 	"log"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
@@ -82,8 +83,8 @@ func (b *QuikBroker) Init(ctx context.Context) error {
 	return nil
 }
 
-func (b *QuikBroker) CheckStatus() {
-	fmt.Printf("%10s %10s\n", b.name, "quik")
+func (b *QuikBroker) WriteStatus(w io.Writer) {
+	fmt.Fprintf(w, "%-10s %-10s\n", b.name, "quik")
 }
 
 func (b *QuikBroker) Close() error {

@@ -1,7 +1,8 @@
-package trader
+package strategymanager
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
@@ -58,18 +59,20 @@ func (s *PortfolioService) Init() error {
 	return nil
 }
 
-func (s *PortfolioService) CheckStatus() {
+func (s *PortfolioService) WriteStatus(w io.Writer) {
 	var limits, err = s.broker.GetPortfolioLimits(s.portfolio.Portfolio)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(w, "%-10v %-10v %v",
+			s.portfolio.Portfolio.Client,
+			s.portfolio.Portfolio.Portfolio,
+			err)
 		return
 	}
 	var varMargin = limits.AccVarMargin + limits.VarMargin
 	var varMarginRatio = varMargin / limits.StartLimitOpenPos
 	var usedRatio = limits.UsedLimOpenPos / limits.StartLimitOpenPos
 
-	fmt.Printf("%10v %10v start: %10.0f available: %10.0f varmargin: %10.0f varmargin: %.1f used: %.1f\n",
-		//fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%.0f\t%.1f\t%.1f\t\n",
+	fmt.Fprintf(w, "%-10v %-10v start: %10.0f available: %10.0f varmargin: %10.0f (%.1f) used: %.1f\n",
 		s.portfolio.Portfolio.Client,
 		s.portfolio.Portfolio.Portfolio,
 		limits.StartLimitOpenPos,

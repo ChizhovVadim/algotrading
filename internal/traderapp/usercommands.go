@@ -1,17 +1,34 @@
-package usercommands
+package traderapp
 
 import (
 	"bufio"
 	"context"
 	"os"
 	"strings"
-
-	"github.com/ChizhovVadim/algotrading/domain/model"
 )
+
+type ExitUserCmd struct{}
+type CheckStatusUserCmd struct{}
+
+type InitLimitsUserCmd struct {
+	Client string
+}
+
+// Принудительная ребалансировка.
+// Например, при вводе/выводе средств.
+type RebalanceUserCmd struct {
+	Client string
+}
+
+// Закрыть все позиции.
+// Например, перед экспирацией, длинными выходными/праздниками.
+type CloseAllUserCmd struct {
+	Client string
+}
 
 // потом можно прикрутить, чтобы команды не только из консоли, но например из телеграм бота.
 // прикрутить, чтобы пользователь мог сам ввести заявку для любого брокера
-func Read(
+func readUserCommands(
 	ctx context.Context,
 	messages chan<- any,
 ) error {
@@ -26,7 +43,7 @@ func Read(
 		case <-ctx.Done():
 			return ctx.Err()
 		case messages <- msg:
-			if _, ok := msg.(model.ExitUserCmd); ok {
+			if _, ok := msg.(ExitUserCmd); ok {
 				return nil
 			}
 		}
@@ -38,13 +55,13 @@ func parseUserCmd(commandLine string) (any, bool) {
 	var tokens = NewTokens(commandLine)
 	var commandName = tokens.Next()
 	if commandName == "quit" || commandName == "exit" {
-		return model.ExitUserCmd{}, true
+		return ExitUserCmd{}, true
 	}
 	if commandName == "status" {
-		return model.CheckStatusUserCmd{}, true
+		return CheckStatusUserCmd{}, true
 	}
 	if commandName == "initlimits" {
-		var res = model.InitLimitsUserCmd{}
+		var res = InitLimitsUserCmd{}
 		for {
 			var token = tokens.Next()
 			if token == "" {
@@ -57,7 +74,7 @@ func parseUserCmd(commandLine string) (any, bool) {
 		return res, true
 	}
 	if commandName == "closeall" {
-		return model.CloseAllUserCmd{}, true
+		return CloseAllUserCmd{}, true
 	}
 	return nil, false
 }

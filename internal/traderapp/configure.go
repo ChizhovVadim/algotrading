@@ -6,7 +6,7 @@ import (
 
 	"github.com/ChizhovVadim/algotrading/domain/advisor"
 	"github.com/ChizhovVadim/algotrading/domain/model"
-	"github.com/ChizhovVadim/algotrading/domain/trader"
+	"github.com/ChizhovVadim/algotrading/domain/strategymanager"
 	"github.com/ChizhovVadim/algotrading/internal/brokermock"
 	"github.com/ChizhovVadim/algotrading/internal/brokerquik"
 	"github.com/ChizhovVadim/algotrading/internal/candlestorage"
@@ -14,7 +14,7 @@ import (
 	"github.com/ChizhovVadim/algotrading/internal/moex"
 )
 
-func (app *TraderApp) configure() error {
+func (app *TraderApp) configure(inbox chan<- any) error {
 	var activeClients = computeActiveClients(app.config)
 	for _, brokerConfig := range app.config.Brokers {
 		var clientKey = brokerConfig.Key
@@ -23,15 +23,18 @@ func (app *TraderApp) configure() error {
 		}
 		switch brokerConfig.Type {
 		case "mock":
-			app.trader.Broker.Add(clientKey, brokermock.New(app.logger, clientKey))
+			app.strategyManager.Broker.Add(clientKey, brokermock.New(app.logger, clientKey))
 		case "quik":
-			app.trader.Broker.Add(clientKey, brokerquik.New(app.logger, app.apiLogger, clientKey, brokerConfig.Port, app.trader.Inbox()))
+			app.strategyManager.Broker.Add(clientKey, brokerquik.New(app.logger, app.apiLogger, clientKey, brokerConfig.Port, inbox))
 		default:
 			// кроме quik можно поддержать API finam/alor/T.
 			return fmt.Errorf("broker type not supported %v", brokerConfig.Type)
 		}
 	}
-	var marketData = app.trader.Broker.Get(app.config.MarketData).(model.IMarketData)
+
+	var marketData = app.strategyManager.Broker.Get(app.config.MarketData).(model.IMarketData)
+	app.logger.Debug("MarketData initialized",
+		"client", app.config.MarketData)
 
 	var candleStorageFolder string
 	if app.config.UseCandleStorage {
@@ -42,23 +45,23 @@ func (app *TraderApp) configure() error {
 		if err != nil {
 			return err
 		}
-		app.trader.AddSignal(signal)
+		app.strategyManager.AddSignal(signal)
 	}
 
 	// Один и тот же портфель создаем один раз
 	for _, portfolioConfig := range app.config.Portfolios {
-		var portfolio = &trader.Portfolio{
+		var portfolio = &strategymanager.Portfolio{
 			Portfolio: model.Portfolio{
 				Client:    portfolioConfig.Client,
 				Firm:      portfolioConfig.Firm,
 				Portfolio: portfolioConfig.Account,
 			},
 		}
-		app.trader.AddPortfolio(trader.NewPortfolioService(app.logger, app.trader.Broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
+		app.strategyManager.AddPortfolio(strategymanager.NewPortfolioService(app.logger, app.strategyManager.Broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
 	}
 
 	// Каждый сигнал торгуем в каждом портфеле
-	app.trader.AddStrategiesForAllSignalPortfolioPairs()
+	app.strategyManager.AddStrategiesForAllSignalPortfolioPairs()
 
 	return nil
 }
@@ -68,7 +71,7 @@ func configureSignal(
 	signalConfig SignalConfig,
 	candleStorageFolder string,
 	marketData model.IMarketData,
-) (*trader.SignalService, error) {
+) (*strategymanager.SignalService, error) {
 	sec, err := moex.GetSecurityInfo(signalConfig.Security)
 	if err != nil {
 		return nil, err
@@ -81,7 +84,7 @@ func configureSignal(
 			return nil, err
 		}
 	}*/
-	var signal = trader.NewSignalService(logger, signalConfig.Advisor,
+	var signal = strategymanager.NewSignalService(logger, signalConfig.Advisor,
 		marketData, sec, candleInterval, advisor, convertSizeConfig(signalConfig.SizeConfig))
 	if candleStorageFolder != "" {
 		var candleStorage = candlestorage.FromCandleInterval(candleStorageFolder, candleInterval, moex.Moscow)
@@ -92,8 +95,8 @@ func configureSignal(
 	return signal, nil
 }
 
-func convertSizeConfig(s SizeConfig) trader.SizeConfig {
-	return trader.SizeConfig{
+func convertSizeConfig(s SizeConfig) strategymanager.SizeConfig {
+	return strategymanager.SizeConfig{
 		LongLever:  s.LongLever,
 		ShortLever: s.ShortLever,
 		MaxLever:   s.MaxLever,

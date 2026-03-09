@@ -1,8 +1,9 @@
-package trader
+package strategymanager
 
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
@@ -37,12 +38,12 @@ func (b *MultyBroker) Init(ctx context.Context) error {
 	return nil
 }
 
-func (b *MultyBroker) CheckStatus() {
+func (b *MultyBroker) WriteStatus(w io.Writer) {
 	// на golang случайный порядок в map
 	for _, child := range b.brokers {
-		child.CheckStatus()
+		child.WriteStatus(w)
 	}
-	fmt.Println("Total brokers:", len(b.brokers))
+	fmt.Fprintln(w, "Total brokers:", len(b.brokers))
 }
 
 func (b *MultyBroker) GetPortfolioLimits(portfolio model.Portfolio) (model.PortfolioLimits, error) {

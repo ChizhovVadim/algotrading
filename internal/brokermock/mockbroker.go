@@ -3,6 +3,7 @@ package brokermock
 import (
 	"context"
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 
@@ -34,8 +35,8 @@ func (b *MockBroker) Init(context.Context) error {
 	return nil
 }
 
-func (b *MockBroker) CheckStatus() {
-	fmt.Printf("%10s %10s\n", b.name, "mock")
+func (b *MockBroker) WriteStatus(w io.Writer) {
+	fmt.Fprintf(w, "%-10s %-10s\n", b.name, "mock")
 }
 
 func (b *MockBroker) GetPortfolioLimits(portfolio model.Portfolio) (model.PortfolioLimits, error) {

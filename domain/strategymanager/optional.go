@@ -1,4 +1,4 @@
-package trader
+package strategymanager
 
 type Optional[T any] struct {
 	Value    T

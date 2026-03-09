@@ -84,6 +84,11 @@ func (s *Service) Update(security string) error {
 			"security", security)
 		return nil
 	}
+	s.logger.Info("New candles",
+		"security", security,
+		"size", len(candles),
+		"first", candles[0],
+		"last", candles[len(candles)-1])
 	if !lastCandle.DateTime.IsZero() {
 		// слишком большое изменение цены может быть ошибкой поставщика
 		var err = checkPriceChange(lastCandle, candles[0])
@@ -91,11 +96,6 @@ func (s *Service) Update(security string) error {
 			return err
 		}
 	}
-	s.logger.Info("New candles",
-		"security", security,
-		"size", len(candles),
-		"first", candles[0],
-		"last", candles[len(candles)-1])
 	return s.candleStorage.Update(security, candles)
 }
 

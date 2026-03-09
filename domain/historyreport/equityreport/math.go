@@ -21,6 +21,7 @@ func moments(source []float64) (mean, stDev float64) {
 	return
 }
 
+// Алгоритм вычисления среднеквадратического отклонения за один проход
 func stDev(source []float64) float64 {
 	var _, stDev = moments(source)
 	return stDev
