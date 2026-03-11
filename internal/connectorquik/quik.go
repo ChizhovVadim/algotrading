@@ -91,17 +91,18 @@ func (q *QuikConnector) Execute(req RequestJson, resp *ResponseJson) error {
 	req.Id = q.nextId
 	q.nextId += 1
 	req.CreatedTime = timeToQuikTime(time.Now())
+	//TODO log clientName in request/response.
 	if err := q.writeRequest(req); err != nil {
 		return err
 	}
 	if err := q.readResponse(resp); err != nil {
 		return err
 	}
-	if resp.LuaError != "" {
-		return fmt.Errorf("lua error: %v", resp.LuaError)
-	}
 	if !(req.Id == resp.Id) {
 		return fmt.Errorf("assert req.Id == resp.Id")
+	}
+	if resp.LuaError != "" {
+		return fmt.Errorf("lua error: %v", resp.LuaError)
 	}
 	return nil
 }

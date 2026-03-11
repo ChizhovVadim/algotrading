@@ -16,6 +16,7 @@ type TraderApp struct {
 	logger          *slog.Logger
 	apiLogger       *log.Logger
 	config          Config
+	broker          *MultyBroker
 	strategyManager *strategymanager.StrategyManager
 }
 
@@ -28,12 +29,13 @@ func New(
 		logger:          logger,
 		apiLogger:       apiLogger,
 		config:          config,
+		broker:          NewMultyBroker(),
 		strategyManager: strategymanager.NewStrategyManager(logger),
 	}
 }
 
 func (app *TraderApp) Close() error {
-	return app.strategyManager.Close()
+	return app.broker.Close()
 }
 
 func (app *TraderApp) Run() error {
@@ -41,15 +43,18 @@ func (app *TraderApp) Run() error {
 	defer app.logger.Info("Application closed.")
 
 	var ctx = context.Background()
-	var inbox = make(chan any)
+	var marketData = make(chan any, 1)
 
-	if err := app.configure(inbox); err != nil {
+	if err := app.configure(marketData); err != nil {
 		return err
 	}
-
+	if err := app.broker.Init(ctx); err != nil {
+		return err
+	}
 	if err := app.strategyManager.Init(ctx); err != nil {
 		return err
 	}
+	app.checkStatus()
 
 	go func() {
 		var err = app.strategyManager.Subscribe(ctx)
@@ -59,19 +64,24 @@ func (app *TraderApp) Run() error {
 		}
 	}()
 
+	var userCmds = make(chan any)
 	go func() {
-		var err = readUserCommands(ctx, inbox)
+		var err = readUserCommands(ctx, userCmds)
 		if err != nil {
 			app.logger.Error("readUserCommands", "error", err)
 			return
 		}
 	}()
 
-	return app.eventLoop(ctx, inbox)
+	return app.eventLoop(ctx, marketData, userCmds)
 }
 
-func (app *TraderApp) eventLoop(ctx context.Context, inbox <-chan any) error {
-	var shouldCheckStatus = time.After(1 * time.Second)
+func (app *TraderApp) eventLoop(
+	ctx context.Context,
+	marketData <-chan any,
+	userCmds <-chan any,
+) error {
+	var shouldCheckStatus <-chan time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -79,16 +89,12 @@ func (app *TraderApp) eventLoop(ctx context.Context, inbox <-chan any) error {
 		case <-shouldCheckStatus:
 			shouldCheckStatus = nil
 			app.checkStatus()
-		case msg, ok := <-inbox:
+		case msg, ok := <-marketData:
 			if !ok {
-				inbox = nil
+				marketData = nil
 				continue
 			}
 			switch msg := msg.(type) {
-			case ExitUserCmd:
-				return nil
-			case CheckStatusUserCmd:
-				app.checkStatus()
 			case model.Candle:
 				if app.strategyManager.OnCandle(msg) {
 					if shouldCheckStatus == nil {
@@ -96,12 +102,26 @@ func (app *TraderApp) eventLoop(ctx context.Context, inbox <-chan any) error {
 					}
 				}
 			}
+		case msg, ok := <-userCmds:
+			if !ok {
+				userCmds = nil
+				continue
+			}
+			switch msg.(type) {
+			case ExitUserCmd:
+				return nil
+			case CheckStatusUserCmd:
+				app.checkStatus()
+			}
 		}
 	}
 }
 
 func (app *TraderApp) checkStatus() {
+	app.logger.Debug("checkStatus started.")
 	var sb = &strings.Builder{}
+	app.broker.WriteStatus(sb)
 	app.strategyManager.WriteStatus(sb)
 	fmt.Print(sb.String()) //TODO SmtpWriter
+	app.logger.Debug("checkStatus finished.")
 }

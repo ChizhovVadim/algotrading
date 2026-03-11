@@ -14,7 +14,7 @@ import (
 	"github.com/ChizhovVadim/algotrading/internal/moex"
 )
 
-func (app *TraderApp) configure(inbox chan<- any) error {
+func (app *TraderApp) configure(marketDataCh chan<- any) error {
 	var activeClients = computeActiveClients(app.config)
 	for _, brokerConfig := range app.config.Brokers {
 		var clientKey = brokerConfig.Key
@@ -23,16 +23,16 @@ func (app *TraderApp) configure(inbox chan<- any) error {
 		}
 		switch brokerConfig.Type {
 		case "mock":
-			app.strategyManager.Broker.Add(clientKey, brokermock.New(app.logger, clientKey))
+			app.broker.Add(clientKey, brokermock.New(app.logger, clientKey))
 		case "quik":
-			app.strategyManager.Broker.Add(clientKey, brokerquik.New(app.logger, app.apiLogger, clientKey, brokerConfig.Port, inbox))
+			app.broker.Add(clientKey, brokerquik.New(app.logger, app.apiLogger, clientKey, brokerConfig.Port, marketDataCh))
 		default:
 			// кроме quik можно поддержать API finam/alor/T.
 			return fmt.Errorf("broker type not supported %v", brokerConfig.Type)
 		}
 	}
 
-	var marketData = app.strategyManager.Broker.Get(app.config.MarketData).(model.IMarketData)
+	var marketData = app.broker.Get(app.config.MarketData).(model.IMarketData)
 	app.logger.Debug("MarketData initialized",
 		"client", app.config.MarketData)
 
@@ -57,7 +57,7 @@ func (app *TraderApp) configure(inbox chan<- any) error {
 				Portfolio: portfolioConfig.Account,
 			},
 		}
-		app.strategyManager.AddPortfolio(strategymanager.NewPortfolioService(app.logger, app.strategyManager.Broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
+		app.strategyManager.AddPortfolio(strategymanager.NewPortfolioService(app.logger, app.broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
 	}
 
 	// Каждый сигнал торгуем в каждом портфеле

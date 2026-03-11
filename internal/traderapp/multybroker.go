@@ -1,4 +1,4 @@
-package strategymanager
+package traderapp
 
 import (
 	"context"

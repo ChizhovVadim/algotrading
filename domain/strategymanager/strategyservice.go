@@ -58,7 +58,7 @@ func (s *StrategyService) Init() error {
 func (s *StrategyService) WriteStatus(w io.Writer) {
 	brokerPos, err := s.getBrokerPos()
 	if err != nil {
-		fmt.Fprintf(w, "%-10v %-10v %10v %v",
+		fmt.Fprintf(w, "%-10v %-10v %10v %v\n",
 			s.portfolio.Portfolio.Client,
 			s.portfolio.Portfolio.Portfolio,
 			s.security.Name,

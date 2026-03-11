@@ -11,7 +11,6 @@ import (
 
 type StrategyManager struct {
 	logger     *slog.Logger
-	Broker     *MultyBroker
 	signals    []*SignalService
 	portfolios []*PortfolioService
 	strategies []*StrategyService
@@ -22,12 +21,7 @@ func NewStrategyManager(
 ) *StrategyManager {
 	return &StrategyManager{
 		logger: logger,
-		Broker: NewMultyBroker(),
 	}
-}
-
-func (m *StrategyManager) Close() error {
-	return m.Broker.Close()
 }
 
 func (m *StrategyManager) AddSignal(signal *SignalService) {
@@ -53,9 +47,6 @@ func (m *StrategyManager) AddStrategiesForAllSignalPortfolioPairs() {
 
 func (m *StrategyManager) Init(ctx context.Context) error {
 	m.logger.Info("Strategies starting...")
-	if err := m.Broker.Init(ctx); err != nil {
-		return err
-	}
 	for _, signal := range m.signals {
 		var err = signal.Init()
 		if err != nil {
@@ -106,8 +97,6 @@ func (m *StrategyManager) OnCandle(candle model.Candle) bool {
 }
 
 func (m *StrategyManager) WriteStatus(w io.Writer) {
-	m.Broker.WriteStatus(w)
-
 	for _, signal := range m.signals {
 		signal.WriteStatus(w)
 	}

@@ -62,7 +62,7 @@ func (s *PortfolioService) Init() error {
 func (s *PortfolioService) WriteStatus(w io.Writer) {
 	var limits, err = s.broker.GetPortfolioLimits(s.portfolio.Portfolio)
 	if err != nil {
-		fmt.Fprintf(w, "%-10v %-10v %v",
+		fmt.Fprintf(w, "%-10v %-10v %v\n",
 			s.portfolio.Portfolio.Client,
 			s.portfolio.Portfolio.Portfolio,
 			err)
