@@ -210,7 +210,7 @@ func (b *QuikBroker) SubscribeCandles(security model.Security, timeframe string)
 		return fmt.Errorf("timeframe not supported %v", timeframe)
 	}
 	// TODO Можно проверять вдруг уже подписаны.
-	b.logger.Info("SubscribeCandles started",
+	b.logger.Debug("SubscribeCandles started",
 		"security", security.Code,
 		"timeframe", timeframe)
 	_, err := b.connector.SubscribeCandles(security.ClassCode, security.Code, candleInterval)

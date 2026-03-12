@@ -48,14 +48,11 @@ func (app *TraderApp) configure(marketDataCh chan<- any) error {
 		app.strategyManager.AddSignal(signal)
 	}
 
-	// Один и тот же портфель создаем один раз
 	for _, portfolioConfig := range app.config.Portfolios {
-		var portfolio = &strategymanager.Portfolio{
-			Portfolio: model.Portfolio{
-				Client:    portfolioConfig.Client,
-				Firm:      portfolioConfig.Firm,
-				Portfolio: portfolioConfig.Account,
-			},
+		var portfolio = model.Portfolio{
+			Client:    portfolioConfig.Client,
+			Firm:      portfolioConfig.Firm,
+			Portfolio: portfolioConfig.Account,
 		}
 		app.strategyManager.AddPortfolio(strategymanager.NewPortfolioService(app.logger, app.broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
 	}

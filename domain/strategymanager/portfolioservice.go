@@ -1,6 +1,7 @@
 package strategymanager
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -8,29 +9,25 @@ import (
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
 
-type Portfolio struct {
-	Portfolio       model.Portfolio
-	AmountAvailable Optional[float64]
-}
-
 type PortfolioService struct {
-	logger    *slog.Logger
-	broker    model.IBroker
-	portfolio *Portfolio
-	maxAmount float64
-	weight    float64
+	logger          *slog.Logger
+	broker          model.IBroker
+	portfolio       model.Portfolio
+	maxAmount       float64 //TODO? Optional
+	weight          float64 //TODO? Optional
+	amountAvailable Optional[float64]
 }
 
 func NewPortfolioService(
 	logger *slog.Logger,
 	broker model.IBroker,
-	portfolio *Portfolio,
+	portfolio model.Portfolio,
 	maxAmount float64,
 	weight float64,
 ) *PortfolioService {
 	logger = logger.With(
-		"client", portfolio.Portfolio.Client,
-		"portfolio", portfolio.Portfolio.Portfolio)
+		"client", portfolio.Client,
+		"portfolio", portfolio.Portfolio)
 	return &PortfolioService{
 		logger:    logger,
 		broker:    broker,
@@ -41,7 +38,7 @@ func NewPortfolioService(
 }
 
 func (s *PortfolioService) Init() error {
-	var limits, err = s.broker.GetPortfolioLimits(s.portfolio.Portfolio)
+	var limits, err = s.broker.GetPortfolioLimits(s.portfolio)
 	if err != nil {
 		return err
 	}
@@ -55,16 +52,23 @@ func (s *PortfolioService) Init() error {
 	s.logger.Info("Init portfolio",
 		"amount", limits.StartLimitOpenPos,
 		"availableAmount", availableAmount)
-	s.portfolio.AmountAvailable.SetValue(availableAmount)
+	s.amountAvailable.SetValue(availableAmount)
 	return nil
 }
 
+func (s *PortfolioService) GetAmountAvailable() (float64, error) {
+	if !s.amountAvailable.HasValue {
+		return 0, errors.New("amountAvailable is none")
+	}
+	return s.amountAvailable.Value, nil
+}
+
 func (s *PortfolioService) WriteStatus(w io.Writer) {
-	var limits, err = s.broker.GetPortfolioLimits(s.portfolio.Portfolio)
+	var limits, err = s.broker.GetPortfolioLimits(s.portfolio)
 	if err != nil {
 		fmt.Fprintf(w, "%-10v %-10v %v\n",
-			s.portfolio.Portfolio.Client,
-			s.portfolio.Portfolio.Portfolio,
+			s.portfolio.Client,
+			s.portfolio.Portfolio,
 			err)
 		return
 	}
@@ -73,10 +77,10 @@ func (s *PortfolioService) WriteStatus(w io.Writer) {
 	var usedRatio = limits.UsedLimOpenPos / limits.StartLimitOpenPos
 
 	fmt.Fprintf(w, "%-10v %-10v start: %10.0f available: %10.0f varmargin: %10.0f (%.1f) used: %.1f\n",
-		s.portfolio.Portfolio.Client,
-		s.portfolio.Portfolio.Portfolio,
+		s.portfolio.Client,
+		s.portfolio.Portfolio,
 		limits.StartLimitOpenPos,
-		s.portfolio.AmountAvailable.Value,
+		s.amountAvailable.Value,
 		varMargin,
 		varMarginRatio*100,
 		usedRatio*100,

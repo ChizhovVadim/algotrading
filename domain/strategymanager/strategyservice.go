@@ -10,38 +10,41 @@ import (
 )
 
 type StrategyService struct {
-	logger     *slog.Logger
-	broker     model.IBroker
-	portfolio  *Portfolio
-	security   model.Security
-	signalName string
+	logger           *slog.Logger
+	signalName       string
+	security         model.Security
+	portfolioService *PortfolioService
+	broker           model.IBroker
+	portfolio        model.Portfolio
 	// планируемая позиция в портфеле (после исполнения заявки)
 	plannedPosition Optional[int]
 }
 
 func NewStrategyService(
 	logger *slog.Logger,
-	broker model.IBroker, // или брать на вход *PortfolioService, *SignalService
-	portfolio *Portfolio,
-	security model.Security,
-	signalName string,
+	signalService *SignalService,
+	portfolioService *PortfolioService,
 ) *StrategyService {
+	var signalName = signalService.name
+	var security = signalService.security
+	var portfolio = portfolioService.portfolio
 	logger = logger.With(
-		"client", portfolio.Portfolio.Client,
-		"portfolio", portfolio.Portfolio.Portfolio,
+		"client", portfolio.Client,
+		"portfolio", portfolio.Portfolio,
 		"security", security.Name,
 		"signal", signalName)
 	return &StrategyService{
-		logger:     logger,
-		broker:     broker,
-		portfolio:  portfolio,
-		security:   security,
-		signalName: signalName,
+		logger:           logger,
+		signalName:       signalName,
+		security:         security,
+		portfolioService: portfolioService,
+		broker:           portfolioService.broker,
+		portfolio:        portfolio,
 	}
 }
 
 func (s *StrategyService) getBrokerPos() (float64, error) {
-	return s.broker.GetPosition(s.portfolio.Portfolio, s.security)
+	return s.broker.GetPosition(s.portfolio, s.security)
 }
 
 func (s *StrategyService) Init() error {
@@ -59,8 +62,8 @@ func (s *StrategyService) WriteStatus(w io.Writer) {
 	brokerPos, err := s.getBrokerPos()
 	if err != nil {
 		fmt.Fprintf(w, "%-10v %-10v %10v %v\n",
-			s.portfolio.Portfolio.Client,
-			s.portfolio.Portfolio.Portfolio,
+			s.portfolio.Client,
+			s.portfolio.Portfolio,
 			s.security.Name,
 			err)
 		return
@@ -72,8 +75,8 @@ func (s *StrategyService) WriteStatus(w io.Writer) {
 		status = "!"
 	}
 	fmt.Fprintf(w, "%-10v %-10v %10v planned: %6v actual: %6v %v\n",
-		s.portfolio.Portfolio.Client,
-		s.portfolio.Portfolio.Portfolio,
+		s.portfolio.Client,
+		s.portfolio.Portfolio,
 		s.security.Name,
 		s.plannedPosition.Value,
 		int(brokerPos),
@@ -92,15 +95,12 @@ func (s *StrategyService) OnSignal(signal Signal) bool {
 
 func (s *StrategyService) on_signal_impl(signal Signal, orderRegistered *bool) error {
 	// стратегия следит только за своими сигналами
-	if !(signal.SecurityCode == s.security.Code &&
+	if !(signal.Security.Code == s.security.Code &&
 		signal.Name == s.signalName) {
 		return nil
 	}
 	// считаем, что сигнал слишком старый
 	if signal.Deadline.Before(time.Now()) {
-		return nil
-	}
-	if !s.portfolio.AmountAvailable.HasValue {
 		return nil
 	}
 	if !signal.ContractsPerAmount.HasValue {
@@ -109,7 +109,11 @@ func (s *StrategyService) on_signal_impl(signal Signal, orderRegistered *bool) e
 	if !s.plannedPosition.HasValue {
 		return nil
 	}
-	var idealPos = signal.ContractsPerAmount.Value * s.portfolio.AmountAvailable.Value
+	var amountAvailable, err = s.portfolioService.GetAmountAvailable()
+	if err != nil {
+		return err
+	}
+	var idealPos = signal.ContractsPerAmount.Value * amountAvailable
 	var volume = int(idealPos - float64(s.plannedPosition.Value))
 	// изменение позиции не требуется
 	if volume == 0 {
@@ -123,7 +127,7 @@ func (s *StrategyService) on_signal_impl(signal Signal, orderRegistered *bool) e
 		return fmt.Errorf("check position failed")
 	}
 	err = s.broker.RegisterOrder(model.Order{
-		Portfolio: s.portfolio.Portfolio,
+		Portfolio: s.portfolio,
 		Security:  s.security,
 		Volume:    volume,
 		Price:     priceWithSlippage(signal.Price, volume),

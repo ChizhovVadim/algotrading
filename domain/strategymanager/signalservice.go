@@ -14,7 +14,7 @@ import (
 type Signal struct {
 	Name               string
 	DateTime           time.Time
-	SecurityCode       string
+	Security           model.Security
 	Price              float64
 	Prediction         float64
 	ContractsPerAmount Optional[float64]
@@ -114,11 +114,11 @@ func (s *SignalService) OnCandle(candle model.Candle) Signal {
 	}
 	var prevPrediction = s.lastSignal.Prediction
 	s.lastSignal = Signal{
-		Name:         s.name,
-		SecurityCode: s.security.Code,
-		DateTime:     candle.DateTime,
-		Price:        candle.ClosePrice,
-		Prediction:   prediction,
+		Name:       s.name,
+		Security:   s.security,
+		DateTime:   candle.DateTime,
+		Price:      candle.ClosePrice,
+		Prediction: prediction,
 	}
 	if !s.baseCandle.DateTime.IsZero() {
 		var position = applySize(prediction, s.sizeConfig)
@@ -160,11 +160,11 @@ func (s *SignalService) AddHistoryCandles(historyCandles iter.Seq2[model.Candle,
 			continue
 		}
 		s.lastSignal = Signal{
-			Name:         s.name,
-			SecurityCode: s.security.Code,
-			DateTime:     candle.DateTime,
-			Price:        candle.ClosePrice,
-			Prediction:   prediction,
+			Name:       s.name,
+			Security:   s.security,
+			DateTime:   candle.DateTime,
+			Price:      candle.ClosePrice,
+			Prediction: prediction,
 		}
 	}
 	if size == 0 {

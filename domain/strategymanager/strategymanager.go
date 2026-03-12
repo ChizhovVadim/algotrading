@@ -40,7 +40,7 @@ func (m *StrategyManager) AddStrategy(strategy *StrategyService) {
 func (m *StrategyManager) AddStrategiesForAllSignalPortfolioPairs() {
 	for _, signal := range m.signals {
 		for _, portfolio := range m.portfolios {
-			m.AddStrategy(NewStrategyService(m.logger, portfolio.broker, portfolio.portfolio, signal.security, signal.name))
+			m.AddStrategy(NewStrategyService(m.logger, signal, portfolio))
 		}
 	}
 }
