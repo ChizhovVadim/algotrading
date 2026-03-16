@@ -2,22 +2,25 @@ package traderapp
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
-	"github.com/ChizhovVadim/algotrading/domain/strategymanager"
+	"github.com/ChizhovVadim/algotrading/domain/trading/brokermulty"
+	"github.com/ChizhovVadim/algotrading/domain/trading/monitoring"
+	"github.com/ChizhovVadim/algotrading/domain/trading/signal"
+	"github.com/ChizhovVadim/algotrading/domain/trading/strategy"
 )
 
 type TraderApp struct {
-	logger          *slog.Logger
-	apiLogger       *log.Logger
-	config          Config
-	broker          *MultyBroker
-	strategyManager *strategymanager.StrategyManager
+	logger     *slog.Logger
+	apiLogger  *log.Logger
+	config     Config
+	broker     *brokermulty.Service
+	monitoring *monitoring.Service
+	signals    []*signal.Service
+	strategies []*strategy.Service
 }
 
 func New(
@@ -26,16 +29,17 @@ func New(
 	config Config,
 ) *TraderApp {
 	return &TraderApp{
-		logger:          logger,
-		apiLogger:       apiLogger,
-		config:          config,
-		broker:          NewMultyBroker(),
-		strategyManager: strategymanager.NewStrategyManager(logger),
+		logger:    logger,
+		apiLogger: apiLogger,
+		config:    config,
 	}
 }
 
 func (app *TraderApp) Close() error {
-	return app.broker.Close()
+	if app.broker != nil {
+		return app.broker.Close()
+	}
+	return nil
 }
 
 func (app *TraderApp) Run() error {
@@ -51,15 +55,24 @@ func (app *TraderApp) Run() error {
 	if err := app.broker.Init(ctx); err != nil {
 		return err
 	}
-	if err := app.strategyManager.Init(ctx); err != nil {
-		return err
+	for _, signal := range app.signals {
+		var err = signal.Init()
+		if err != nil {
+			return err
+		}
+	}
+	for _, strategy := range app.strategies {
+		var err = strategy.Init()
+		if err != nil {
+			return err
+		}
 	}
 	app.checkStatus()
 
 	go func() {
-		var err = app.strategyManager.Subscribe(ctx)
+		var err = app.subscribe()
 		if err != nil {
-			app.logger.Error("strategyManager.Subscribe", "error", err)
+			app.logger.Error("app.subscribe", "error", err)
 			return
 		}
 	}()
@@ -95,8 +108,8 @@ func (app *TraderApp) eventLoop(
 				continue
 			}
 			switch msg := msg.(type) {
-			case model.Candle:
-				if app.strategyManager.OnCandle(msg) {
+			case model.CandleFinishedEvent:
+				if app.OnCandle(msg) {
 					if shouldCheckStatus == nil {
 						shouldCheckStatus = time.After(10 * time.Second)
 					}
@@ -117,11 +130,41 @@ func (app *TraderApp) eventLoop(
 	}
 }
 
+func (app *TraderApp) subscribe() error {
+	for _, signal := range app.signals {
+		var err = signal.Subscribe()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (app *TraderApp) OnCandle(candle model.CandleFinishedEvent) bool {
+	var orderRegistered bool
+	for _, signalStrategy := range app.signals {
+		var signal = signalStrategy.OnCandle(candle)
+		if signal.Deadline.IsZero() {
+			continue
+		}
+		for _, strategy := range app.strategies {
+			if strategy.OnSignal(signal) {
+				orderRegistered = true
+			}
+		}
+	}
+	// TODO Пусть IBroker при регистрации заявки кидает Event для мониторинга.
+	return orderRegistered
+}
+
 func (app *TraderApp) checkStatus() {
-	app.logger.Debug("checkStatus started.")
-	var sb = &strings.Builder{}
-	app.broker.WriteStatus(sb)
-	app.strategyManager.WriteStatus(sb)
-	fmt.Print(sb.String()) //TODO SmtpWriter
-	app.logger.Debug("checkStatus finished.")
+	var signals []model.Signal
+	for _, signal := range app.signals {
+		signals = append(signals, signal.Current())
+	}
+	var positions []model.PlannedPosition
+	for _, strategy := range app.strategies {
+		positions = append(positions, strategy.PlannedPosition())
+	}
+	app.monitoring.Update(signals, positions)
 }

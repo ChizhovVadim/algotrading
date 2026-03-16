@@ -60,7 +60,9 @@ func (b *QuikBroker) handleCallbacks(ctx context.Context, cj connectorquik.Callb
 			select {
 			case <-ctx.Done():
 				//return ctx.Err()
-			case b.marketDataCallbacks <- convertToCandle(newCandle):
+			case b.marketDataCallbacks <- model.CandleFinishedEvent{
+				Candle: convertToCandle(newCandle),
+			}:
 			}
 		}
 		return

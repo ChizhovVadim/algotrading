@@ -1,4 +1,4 @@
-package notify
+package notifyemail
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"net/smtp"
 )
 
-type SmtpWriter struct {
+type Service struct {
 	addr    string
 	auth    smtp.Auth
 	from    string
@@ -14,15 +14,15 @@ type SmtpWriter struct {
 	subject string
 }
 
-func NewSmtpWriter(
+func New(
 	from string,
 	to string,
 	password string,
 	host string,
 	port string,
 	subject string,
-) *SmtpWriter {
-	return &SmtpWriter{
+) *Service {
+	return &Service{
 		addr:    host + ":" + port,
 		auth:    smtp.PlainAuth("", from, password, host),
 		from:    from,
@@ -31,10 +31,9 @@ func NewSmtpWriter(
 	}
 }
 
-func (srv *SmtpWriter) Write(s string) error {
+func (s *Service) Notify(message string) error {
 	var buff = &bytes.Buffer{}
-	fmt.Fprintf(buff, "Subject: %v\r\n", srv.subject)
-	buff.WriteString(s)
-	var msg = buff.Bytes()
-	return smtp.SendMail(srv.addr, srv.auth, srv.from, srv.to, msg)
+	fmt.Fprintf(buff, "Subject: %v\r\n", s.subject)
+	buff.WriteString(message)
+	return smtp.SendMail(s.addr, s.auth, s.from, s.to, buff.Bytes())
 }

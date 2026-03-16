@@ -1,4 +1,4 @@
-package traderapp
+package brokermulty
 
 import (
 	"context"
@@ -8,27 +8,27 @@ import (
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
 
-var _ model.IBroker = (*MultyBroker)(nil)
+var _ model.IBroker = (*Service)(nil)
 
-type MultyBroker struct {
+type Service struct {
 	brokers map[string]model.IBroker
 }
 
-func NewMultyBroker() *MultyBroker {
-	return &MultyBroker{
+func New() *Service {
+	return &Service{
 		brokers: make(map[string]model.IBroker),
 	}
 }
 
-func (b *MultyBroker) Add(key string, broker model.IBroker) {
+func (b *Service) Add(key string, broker model.IBroker) {
 	b.brokers[key] = broker
 }
 
-func (b *MultyBroker) Get(key string) model.IBroker {
+func (b *Service) Get(key string) model.IBroker {
 	return b.brokers[key]
 }
 
-func (b *MultyBroker) Init(ctx context.Context) error {
+func (b *Service) Init(ctx context.Context) error {
 	for _, child := range b.brokers {
 		var err = child.Init(ctx)
 		if err != nil {
@@ -38,7 +38,7 @@ func (b *MultyBroker) Init(ctx context.Context) error {
 	return nil
 }
 
-func (b *MultyBroker) WriteStatus(w io.Writer) {
+func (b *Service) WriteStatus(w io.Writer) {
 	// на golang случайный порядок в map
 	for _, child := range b.brokers {
 		child.WriteStatus(w)
@@ -46,19 +46,19 @@ func (b *MultyBroker) WriteStatus(w io.Writer) {
 	fmt.Fprintln(w, "Total brokers:", len(b.brokers))
 }
 
-func (b *MultyBroker) GetPortfolioLimits(portfolio model.Portfolio) (model.PortfolioLimits, error) {
+func (b *Service) GetPortfolioLimits(portfolio model.Portfolio) (model.PortfolioLimits, error) {
 	return b.brokers[portfolio.Client].GetPortfolioLimits(portfolio)
 }
 
-func (b *MultyBroker) GetPosition(portfolio model.Portfolio, security model.Security) (float64, error) {
+func (b *Service) GetPosition(portfolio model.Portfolio, security model.Security) (float64, error) {
 	return b.brokers[portfolio.Client].GetPosition(portfolio, security)
 }
 
-func (b *MultyBroker) RegisterOrder(order model.Order) error {
+func (b *Service) RegisterOrder(order model.Order) error {
 	return b.brokers[order.Portfolio.Client].RegisterOrder(order)
 }
 
-func (b *MultyBroker) Close() error {
+func (b *Service) Close() error {
 	for _, broker := range b.brokers {
 		broker.Close()
 	}

@@ -2,19 +2,31 @@ package traderapp
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/ChizhovVadim/algotrading/domain/advisor"
 	"github.com/ChizhovVadim/algotrading/domain/model"
-	"github.com/ChizhovVadim/algotrading/domain/strategymanager"
+	"github.com/ChizhovVadim/algotrading/domain/trading/brokermulty"
+	"github.com/ChizhovVadim/algotrading/domain/trading/monitoring"
+	"github.com/ChizhovVadim/algotrading/domain/trading/signal"
+	"github.com/ChizhovVadim/algotrading/domain/trading/strategy"
 	"github.com/ChizhovVadim/algotrading/internal/brokermock"
 	"github.com/ChizhovVadim/algotrading/internal/brokerquik"
 	"github.com/ChizhovVadim/algotrading/internal/candlestorage"
 	"github.com/ChizhovVadim/algotrading/internal/cli"
 	"github.com/ChizhovVadim/algotrading/internal/moex"
+	"github.com/ChizhovVadim/algotrading/internal/notifyemail"
 )
 
 func (app *TraderApp) configure(marketDataCh chan<- any) error {
+	app.broker = brokermulty.New()
+
+	var notifyService monitoring.INotifyService
+	if app.config.NotifyConfig.Enabled {
+		var c = app.config.NotifyConfig
+		notifyService = notifyemail.New(c.From, c.To, c.Password, c.Host, c.Port, "Trading")
+	}
+	app.monitoring = monitoring.New(app.logger, app.broker, notifyService)
+
 	var activeClients = computeActiveClients(app.config)
 	for _, brokerConfig := range app.config.Brokers {
 		var clientKey = brokerConfig.Key
@@ -36,69 +48,47 @@ func (app *TraderApp) configure(marketDataCh chan<- any) error {
 	app.logger.Debug("MarketData initialized",
 		"client", app.config.MarketData)
 
-	var candleStorageFolder string
-	if app.config.UseCandleStorage {
-		candleStorageFolder = cli.MapPath("~/TradingData")
-	}
 	for _, signalConfig := range app.config.Signals {
-		signal, err := configureSignal(app.logger, signalConfig, candleStorageFolder, marketData)
+		var security, err = moex.GetSecurityInfo(signalConfig.Security)
 		if err != nil {
 			return err
 		}
-		app.strategyManager.AddSignal(signal)
-	}
-
-	for _, portfolioConfig := range app.config.Portfolios {
-		var portfolio = model.Portfolio{
-			Client:    portfolioConfig.Client,
-			Firm:      portfolioConfig.Firm,
-			Portfolio: portfolioConfig.Account,
+		var signalName = getSignalName(signalConfig)
+		const candleInterval = model.CandleIntervalMinutes5
+		var advisor = advisor.BuildMain(app.logger, signalConfig.Advisor, signalConfig.StdVolatility)
+		var signal = signal.New(app.logger, marketData, signalName, security, candleInterval, advisor)
+		if app.config.UseCandleStorage {
+			var candleStorage = candlestorage.FromCandleInterval(cli.MapPath("~/TradingData"), candleInterval, moex.Moscow)
+			if err := signal.AddHistoryCandles(candleStorage.Candles(security.Name)); err != nil {
+				return err
+			}
 		}
-		app.strategyManager.AddPortfolio(strategymanager.NewPortfolioService(app.logger, app.broker, portfolio, portfolioConfig.MaxAmount, portfolioConfig.Weight))
-	}
+		app.signals = append(app.signals, signal)
 
-	// Каждый сигнал торгуем в каждом портфеле
-	app.strategyManager.AddStrategiesForAllSignalPortfolioPairs()
+		// Каждый сигнал торгуем в каждом портфеле
+		for _, portfolioConfig := range app.config.Portfolios {
+			var portfolio = model.Portfolio{
+				Client:    portfolioConfig.Client,
+				Firm:      portfolioConfig.Firm,
+				Portfolio: portfolioConfig.Account,
+			}
+			var strategy = strategy.New(app.logger, app.broker, signalName, security, portfolio,
+				strategy.SizePolicy{
+					LongLever:  signalConfig.SizeConfig.LongLever,
+					ShortLever: signalConfig.SizeConfig.ShortLever,
+					MaxLever:   signalConfig.SizeConfig.MaxLever,
+					Weight:     signalConfig.SizeConfig.Weight,
+					MaxAmount:  portfolioConfig.MaxAmount,
+				})
+			app.strategies = append(app.strategies, strategy)
+		}
+	}
 
 	return nil
 }
 
-func configureSignal(
-	logger *slog.Logger,
-	signalConfig SignalConfig,
-	candleStorageFolder string,
-	marketData model.IMarketData,
-) (*strategymanager.SignalService, error) {
-	sec, err := moex.GetSecurityInfo(signalConfig.Security)
-	if err != nil {
-		return nil, err
-	}
-	var candleInterval = model.CandleIntervalMinutes5
-	var advisor = advisor.BuildMain(logger, signalConfig.Advisor, signalConfig.StdVolatility)
-	/*if candleStorageFolder != "" {
-		var candleStorage = candlestorage.FromCandleInterval(candleStorageFolder, candleInterval, moex.Moscow)
-		if err := advisor.AddCandles(candleStorage.Candles(sec.Name)); err != nil {
-			return nil, err
-		}
-	}*/
-	var signal = strategymanager.NewSignalService(logger, signalConfig.Advisor,
-		marketData, sec, candleInterval, advisor, convertSizeConfig(signalConfig.SizeConfig))
-	if candleStorageFolder != "" {
-		var candleStorage = candlestorage.FromCandleInterval(candleStorageFolder, candleInterval, moex.Moscow)
-		if err := signal.AddHistoryCandles(candleStorage.Candles(sec.Name)); err != nil {
-			return nil, err
-		}
-	}
-	return signal, nil
-}
-
-func convertSizeConfig(s SizeConfig) strategymanager.SizeConfig {
-	return strategymanager.SizeConfig{
-		LongLever:  s.LongLever,
-		ShortLever: s.ShortLever,
-		MaxLever:   s.MaxLever,
-		Weight:     s.Weight,
-	}
+func getSignalName(signalConfig SignalConfig) string {
+	return fmt.Sprintf("%v-%v", signalConfig.Advisor, signalConfig.Security)
 }
 
 func computeActiveClients(config Config) map[string]bool {
