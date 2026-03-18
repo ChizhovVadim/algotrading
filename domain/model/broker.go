@@ -2,7 +2,6 @@ package model
 
 import (
 	"context"
-	"io"
 	"iter"
 )
 
@@ -56,18 +55,8 @@ type IMarketData interface {
 
 type IBroker interface {
 	Init(context.Context) error
-	WriteStatus(w io.Writer)
 	Close() error
 	GetPortfolioLimits(portfolio Portfolio) (PortfolioLimits, error)
 	GetPosition(portfolio Portfolio, security Security) (float64, error)
 	RegisterOrder(order Order) error
-}
-
-// ленивая инициализация IBroker и IMarketData
-type IBrokerManager interface {
-	InitBroker(client string) (IBroker, error)
-	GetBroker(client string) (IBroker, bool)
-	InitMarketData() (IMarketData, error)
-	Status() string
-	Close() error
 }
