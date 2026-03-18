@@ -3,6 +3,7 @@ package advisorstatus
 import (
 	"fmt"
 	"iter"
+	"time"
 
 	"github.com/ChizhovVadim/algotrading/domain/advisor"
 	"github.com/ChizhovVadim/algotrading/domain/model"
@@ -12,6 +13,12 @@ type ICandleStorage interface {
 	Candles(securityCode string) iter.Seq2[model.Candle, error]
 }
 
+type Signal struct {
+	DateTime   time.Time
+	Price      float64
+	Prediction float64
+}
+
 func ShowStatus(
 	candleStorage ICandleStorage,
 	advisorName string,
@@ -19,21 +26,25 @@ func ShowStatus(
 	count int,
 ) error {
 	var advisor = advisor.BuildTest(advisorName)
-	var advices []float64 //collections.deque(maxlen=count)
+	var history []Signal //TODO collections.deque(maxlen=count)
 	for candle, err := range candleStorage.Candles(securityName) {
 		if err != nil {
 			return err
 		}
-		var newPosition, ok = advisor.Add(candle.DateTime, candle.ClosePrice)
+		var prediction, ok = advisor.Add(candle.DateTime, candle.ClosePrice)
 		if !ok {
 			continue
 		}
-		if len(advices) == 0 || advices[len(advices)-1] != newPosition {
-			advices = append(advices, newPosition)
+		if len(history) == 0 || history[len(history)-1].Prediction != prediction {
+			history = append(history, Signal{
+				DateTime:   candle.DateTime,
+				Price:      candle.ClosePrice,
+				Prediction: prediction,
+			})
 		}
 	}
 	fmt.Println(advisorName, securityName)
-	for _, item := range advices[max(0, len(advices)-count):] {
+	for _, item := range history[max(0, len(history)-count):] {
 		fmt.Println(item)
 	}
 	return nil
