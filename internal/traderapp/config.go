@@ -22,7 +22,7 @@ type NotifyConfig struct {
 type BrokerConfig struct {
 	Key  string `xml:",attr"`
 	Type string `xml:",attr"`
-	Port int    `xml:",attr"`
+	Port int    `xml:",attr"` //or Settings map[string]any
 }
 
 type SignalConfig struct {

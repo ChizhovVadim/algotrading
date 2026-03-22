@@ -29,6 +29,7 @@ func (b *Service) Get(key string) model.IBroker {
 }
 
 func (b *Service) All() iter.Seq2[string, model.IBroker] {
+	// на golang случайный порядок в map
 	return maps.All(b.brokers)
 }
 

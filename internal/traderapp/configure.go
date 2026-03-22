@@ -58,6 +58,8 @@ func (app *TraderApp) configure(marketDataCh chan<- any) error {
 		var advisor = advisor.BuildMain(app.logger, signalConfig.Advisor, signalConfig.StdVolatility)
 		var signal = signal.New(app.logger, marketData, signalName, security, candleInterval, advisor)
 		if app.config.UseCandleStorage {
+			// Последние версии квика, около даты экспирации могут подсунуть в качестве исторических баров данные от предыдущего контракта.
+			// поэтому надежнее всегда вначале брать свои данные, а уже потом из квика.
 			var candleStorage = candlestorage.FromCandleInterval(cli.MapPath("~/TradingData"), candleInterval, moex.Moscow)
 			if err := signal.AddHistoryCandles(candleStorage.Candles(security.Name)); err != nil {
 				return err

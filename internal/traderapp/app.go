@@ -70,6 +70,9 @@ func (app *TraderApp) Run() error {
 	app.checkStatus()
 
 	go func() {
+		// подписываемся в отдельной горутине,
+		// чтобы сразу начать читать бары и не заблокироваться.
+		// IMarketData::SubscribeCandles должен быть потокобезопасным.
 		var err = app.subscribe()
 		if err != nil {
 			app.logger.Error("app.subscribe", "error", err)

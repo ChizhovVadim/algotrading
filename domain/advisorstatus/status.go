@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ChizhovVadim/algotrading/domain/advisor"
+	"github.com/ChizhovVadim/algotrading/domain/algo"
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
 
@@ -26,7 +27,7 @@ func ShowStatus(
 	count int,
 ) error {
 	var advisor = advisor.BuildTest(advisorName)
-	var history []Signal //TODO collections.deque(maxlen=count)
+	var history = algo.NewSlidingWindow[Signal](count)
 	for candle, err := range candleStorage.Candles(securityName) {
 		if err != nil {
 			return err
@@ -35,8 +36,9 @@ func ShowStatus(
 		if !ok {
 			continue
 		}
-		if len(history) == 0 || history[len(history)-1].Prediction != prediction {
-			history = append(history, Signal{
+		if history.Len() == 0 ||
+			history.Item(history.Len()-1).Prediction != prediction {
+			history.Add(Signal{
 				DateTime:   candle.DateTime,
 				Price:      candle.ClosePrice,
 				Prediction: prediction,
@@ -44,7 +46,7 @@ func ShowStatus(
 		}
 	}
 	fmt.Println(advisorName, securityName)
-	for _, item := range history[max(0, len(history)-count):] {
+	for _, item := range history.Items() {
 		fmt.Println(item)
 	}
 	return nil
