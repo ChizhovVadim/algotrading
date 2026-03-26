@@ -19,6 +19,7 @@ import (
 
 type QuikConnector struct {
 	logger       *log.Logger
+	name         string
 	port         int
 	nextId       int64
 	mu           sync.Mutex
@@ -30,11 +31,13 @@ type QuikConnector struct {
 
 func New(
 	logger *log.Logger,
+	name string,
 	port int,
 	startId int64,
 ) *QuikConnector {
 	return &QuikConnector{
 		logger: logger,
+		name:   name,
 		port:   port,
 		nextId: startId,
 	}
@@ -66,7 +69,9 @@ func (q *QuikConnector) Init(
 		var err = q.handleCallbacks(ctx, callbackHandler)
 		if err != nil {
 			if q.logger != nil {
-				q.logger.Println("quik.handleCallbacks", "error", err)
+				q.logger.Println("quik.handleCallbacks",
+					"client", q.name,
+					"error", err)
 			}
 			return
 		}
@@ -121,7 +126,7 @@ func (q *QuikConnector) writeRequest(request RequestJson) error {
 		return err
 	}
 	if q.logger != nil {
-		q.logger.Println(string(b))
+		q.logger.Println("client", q.name, string(b))
 	}
 	return nil
 }
@@ -132,7 +137,7 @@ func (q *QuikConnector) readResponse(resp *ResponseJson) error {
 		return err
 	}
 	if q.logger != nil {
-		q.logger.Println(compactString(incoming, 2_048))
+		q.logger.Println("client", q.name, compactString(incoming, 2_048))
 	}
 	err = json.Unmarshal([]byte(incoming), resp)
 	if err != nil {

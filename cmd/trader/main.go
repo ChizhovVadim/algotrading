@@ -61,6 +61,7 @@ func main() {
 	}
 	defer apiLogFile.Close()
 
+	// Чтобы логировать запросы/ответы к внешним API без экранирования символов.
 	var apiLogger = log.New(apiLogFile, "", log.LstdFlags|log.Lmicroseconds)
 
 	var app = traderapp.New(logger, apiLogger, config)

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/ChizhovVadim/algotrading/domain/algo"
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
 
@@ -73,8 +74,7 @@ func meanBySum(hprs []model.DateSum) float64 {
 	for i := range items {
 		items[i] = hprs[i].Sum
 	}
-	mean, _ := moments(items)
-	return mean
+	return algo.Mean(items)
 }
 
 func totalHpr(source []model.DateSum) float64 {
@@ -90,7 +90,7 @@ func stDevHprs(source []model.DateSum) float64 {
 	for i := range source {
 		x[i] = math.Log(source[i].Sum)
 	}
-	return stDev(x)
+	return algo.StDev(x)
 }
 
 func computeDrawdownInfo(hprs []model.DateSum) DrawdownInfo {

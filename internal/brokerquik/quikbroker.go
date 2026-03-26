@@ -1,7 +1,6 @@
 package brokerquik
 
 import (
-	"io"
 	"log"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
@@ -23,7 +22,6 @@ var _ model.IMarketData = (*QuikBroker)(nil)
 
 type QuikBroker struct {
 	logger              *slog.Logger
-	name                string
 	connector           *connectorquik.QuikConnector
 	marketDataCallbacks chan<- any
 	nextTransactionId   int64
@@ -41,8 +39,7 @@ func New(
 		"type", "quik")
 	return &QuikBroker{
 		logger:              logger,
-		name:                name,
-		connector:           connectorquik.New(apiLogger, port, 1),
+		connector:           connectorquik.New(apiLogger, name, port, 1),
 		marketDataCallbacks: marketDataCallbacks,
 		nextTransactionId:   calculateStartTransId(),
 	}
@@ -83,10 +80,6 @@ func (b *QuikBroker) Init(ctx context.Context) error {
 	}
 	b.logger.Info("Init broker")
 	return nil
-}
-
-func (b *QuikBroker) WriteStatus(w io.Writer) {
-	fmt.Fprintf(w, "%-10s %-10s\n", b.name, "quik")
 }
 
 func (b *QuikBroker) Close() error {

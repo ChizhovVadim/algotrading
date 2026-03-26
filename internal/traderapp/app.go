@@ -156,7 +156,7 @@ func (app *TraderApp) OnCandle(candle model.CandleFinishedEvent) bool {
 			}
 		}
 	}
-	// TODO Пусть IBroker при регистрации заявки кидает Event для мониторинга.
+	// TODO сделать StrategyRebalanceEvent для мониторинга?
 	return orderRegistered
 }
 

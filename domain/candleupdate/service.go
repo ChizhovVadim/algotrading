@@ -50,6 +50,7 @@ func (s *Service) UpdateGroup(securityNames []string) error {
 		if err != nil {
 			secCodeFailed = append(secCodeFailed, securityName)
 		}
+		// чтобы поставщик не забанил за многократные запросы
 		time.Sleep(1 * time.Second)
 	}
 	if len(secCodeFailed) != 0 {
