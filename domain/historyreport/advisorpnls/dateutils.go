@@ -8,10 +8,6 @@ func fromOneDay(a, b time.Time) bool {
 	return y1 == y2 && m1 == m2 && d1 == d2
 }
 
-func isMainFortsSession(d time.Time) bool {
-	return d.Hour() >= 10 && d.Hour() <= 18
-}
-
 func dateTimeToDate(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())

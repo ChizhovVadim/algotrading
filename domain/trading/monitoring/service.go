@@ -2,9 +2,11 @@ package monitoring
 
 import (
 	"fmt"
+	"io"
 	"iter"
 	"log/slog"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/ChizhovVadim/algotrading/domain/model"
 )
@@ -55,16 +57,21 @@ func (s *Service) Update(
 	}
 	fmt.Fprintln(sb, "Total brokers:", totalBrokers)
 
+	var w = newTabWriter(sb)
+	fmt.Fprintf(w, "Signal\tDeadline\tPrice\tPosition\t\n")
 	for _, signal := range signals {
-		fmt.Fprintf(sb, "%-16v %16v %8v %8.4f\n",
+		fmt.Fprintf(w, "%v\t%v\t%v\t%.4f\t\n",
 			signal.Name,
 			signal.Deadline.Format("2006-01-02 15:04"),
 			signal.Price,
 			signal.Value,
 		)
 	}
+	w.Flush()
 	fmt.Fprintln(sb, "Total signals:", len(signals))
 
+	w = newTabWriter(sb)
+	fmt.Fprintf(w, "Client\tPortfolio\tAmount\tVarMargin\tVarMarginRatio\tUsedRatio\t\n")
 	var visitedPortfolios = make(map[string]struct{})
 	for _, position := range positions {
 		var portfolio = position.Portfolio
@@ -75,51 +82,47 @@ func (s *Service) Update(
 
 		var limits, err = s.brokerRegistry.GetPortfolioLimits(portfolio)
 		if err != nil {
-			warningCount += 1
-			fmt.Fprintf(sb, "%-10v %-10v %v\n",
-				portfolio.Client,
-				portfolio.Portfolio,
-				err)
-		} else {
-			var varMargin = limits.AccVarMargin + limits.VarMargin
-			fmt.Fprintf(sb, "%-10v %-10v start: %10.0f varmargin: %10.0f (%.1f) used: %.1f\n",
-				portfolio.Client,
-				portfolio.Portfolio,
-				limits.StartLimitOpenPos,
-				varMargin,
-				varMargin/limits.StartLimitOpenPos*100,
-				limits.UsedLimOpenPos/limits.StartLimitOpenPos*100,
-			)
+			//TODO
+			continue
 		}
+		var varMargin = limits.AccVarMargin + limits.VarMargin
+		fmt.Fprintf(w, "%v\t%v\t%.0f\t%.0f\t%.1f\t%.1f\t\n",
+			portfolio.Client,
+			portfolio.Portfolio,
+			limits.StartLimitOpenPos,
+			varMargin,
+			varMargin/limits.StartLimitOpenPos*100,
+			limits.UsedLimOpenPos/limits.StartLimitOpenPos*100,
+		)
 	}
+	w.Flush()
 	fmt.Fprintln(sb, "Total portfolios:", len(visitedPortfolios))
 
+	w = newTabWriter(sb)
+	fmt.Fprintf(w, "Client\tPortfolio\tSecurity\tPlanned\tActual\tStatus\t\n")
 	for _, position := range positions {
 		var brokerPos, err = s.brokerRegistry.GetPosition(position.Portfolio, position.Security)
 		if err != nil {
-			warningCount += 1
-			fmt.Fprintf(sb, "%-10v %-10v %10v %v\n",
-				position.Portfolio.Client,
-				position.Portfolio.Portfolio,
-				position.Security.Name,
-				err)
-		} else {
-			var status string
-			if position.Planned == int(brokerPos) {
-				status = "+"
-			} else {
-				errorCount += 1
-				status = "!"
-			}
-			fmt.Fprintf(sb, "%-10v %-10v %10v planned: %6v actual: %6v %v\n",
-				position.Portfolio.Client,
-				position.Portfolio.Portfolio,
-				position.Security.Name,
-				position.Planned,
-				int(brokerPos),
-				status)
+			//TODO
+			continue
 		}
+		var status string
+		if position.Planned == int(brokerPos) {
+			status = "+"
+		} else {
+			errorCount += 1
+			status = "!"
+		}
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t\n",
+			position.Portfolio.Client,
+			position.Portfolio.Portfolio,
+			position.Security.Name,
+			position.Planned,
+			int(brokerPos),
+			status,
+		)
 	}
+	w.Flush()
 	fmt.Fprintln(sb, "Total strategies:", len(positions))
 
 	if warningCount != 0 || errorCount != 0 {
@@ -135,4 +138,8 @@ func (s *Service) Update(
 			s.logger.Info("notifyService.Notify", "error", err)
 		}
 	}
+}
+
+func newTabWriter(w io.Writer) *tabwriter.Writer {
+	return tabwriter.NewWriter(w, 0, 0, 1, ' ', tabwriter.AlignRight)
 }
